@@ -15,7 +15,7 @@ A simple web application that converts PNG and JPG images to SVG format while ma
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/pngjpg-to-svg.git
+git clone https://github.com/CodePhyt/pngjpg-to-svg.git
 cd pngjpg-to-svg
 ```
 
