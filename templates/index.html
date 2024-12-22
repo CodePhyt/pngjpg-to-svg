@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PNG/JPG to SVG Converter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #666;
+        }
+        input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        .message {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+            border: 1px solid #d6e9c6;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+            border: 1px solid #ebccd1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>PNG/JPG to SVG Converter</h1>
+        <form id="convertForm">
+            <div class="form-group">
+                <label for="file">Select Image (PNG or JPG):</label>
+                <input type="file" id="file" name="file" accept=".png,.jpg,.jpeg" required>
+            </div>
+            <button type="submit">Convert to SVG</button>
+        </form>
+        <div id="loading" class="loading">
+            Converting... Please wait...
+        </div>
+        <div id="message" class="message"></div>
+    </div>
+
+    <script>
+        const form = document.getElementById('convertForm');
+        const loading = document.getElementById('loading');
+        const message = document.getElementById('message');
+
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            loading.style.display = 'block';
+            message.style.display = 'none';
+            
+            const formData = new FormData(this);
+            
+            try {
+                const response = await fetch('/convert', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = formData.get('file').name.replace(/\.[^/.]+$/, '.svg');
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    
+                    message.className = 'message success';
+                    message.textContent = 'Conversion successful! SVG file has been downloaded.';
+                    message.style.display = 'block';
+                } else {
+                    const error = await response.text();
+                    message.className = 'message error';
+                    message.textContent = 'Error: ' + error;
+                    message.style.display = 'block';
+                }
+            } catch (error) {
+                message.className = 'message error';
+                message.textContent = 'Error: ' + error.message;
+                message.style.display = 'block';
+            } finally {
+                loading.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
