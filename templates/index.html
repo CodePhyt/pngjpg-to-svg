@@ -7,7 +7,7 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 600px;
+            max-width: 800px;
             margin: 0 auto;
             padding: 20px;
             background-color: #f5f5f5;
@@ -71,6 +71,22 @@
             color: #a94442;
             border: 1px solid #ebccd1;
         }
+        .progress-container {
+            margin-top: 15px;
+            display: none;
+        }
+        .progress-item {
+            margin-bottom: 10px;
+            padding: 8px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .progress-item.done {
+            background-color: #d4edda;
+        }
+        .progress-item.error {
+            background-color: #f8d7da;
+        }
     </style>
 </head>
 <body>
@@ -78,14 +94,15 @@
         <h1>PNG/JPG to SVG Converter</h1>
         <form id="convertForm">
             <div class="form-group">
-                <label for="file">Select Image (PNG or JPG):</label>
-                <input type="file" id="file" name="file" accept=".png,.jpg,.jpeg" required>
+                <label for="files">Select Images (PNG or JPG):</label>
+                <input type="file" id="files" name="files" accept=".png,.jpg,.jpeg" multiple required>
             </div>
             <button type="submit">Convert to SVG</button>
         </form>
         <div id="loading" class="loading">
             Converting... Please wait...
         </div>
+        <div id="progress" class="progress-container"></div>
         <div id="message" class="message"></div>
     </div>
 
@@ -93,47 +110,74 @@
         const form = document.getElementById('convertForm');
         const loading = document.getElementById('loading');
         const message = document.getElementById('message');
+        const progress = document.getElementById('progress');
 
         form.addEventListener('submit', async function(e) {
             e.preventDefault();
-            loading.style.display = 'block';
-            message.style.display = 'none';
+            const files = document.getElementById('files').files;
             
-            const formData = new FormData(this);
-            
-            try {
-                const response = await fetch('/convert', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (response.ok) {
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = formData.get('file').name.replace(/\.[^/.]+$/, '.svg');
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-                    
-                    message.className = 'message success';
-                    message.textContent = 'Conversion successful! SVG file has been downloaded.';
-                    message.style.display = 'block';
-                } else {
-                    const error = await response.text();
-                    message.className = 'message error';
-                    message.textContent = 'Error: ' + error;
-                    message.style.display = 'block';
-                }
-            } catch (error) {
+            if (files.length === 0) {
                 message.className = 'message error';
-                message.textContent = 'Error: ' + error.message;
+                message.textContent = 'Please select at least one file.';
                 message.style.display = 'block';
-            } finally {
-                loading.style.display = 'none';
+                return;
             }
+
+            loading.style.display = 'block';
+            progress.style.display = 'block';
+            progress.innerHTML = '';
+            message.style.display = 'none';
+
+            let successCount = 0;
+            let errorCount = 0;
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const progressItem = document.createElement('div');
+                progressItem.className = 'progress-item';
+                progressItem.textContent = `Converting ${file.name}...`;
+                progress.appendChild(progressItem);
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    const response = await fetch('/convert', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = file.name.replace(/\.[^/.]+$/, '.svg');
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);
+
+                        progressItem.className = 'progress-item done';
+                        progressItem.textContent = `✓ ${file.name} converted successfully`;
+                        successCount++;
+                    } else {
+                        const error = await response.text();
+                        progressItem.className = 'progress-item error';
+                        progressItem.textContent = `✗ Error converting ${file.name}: ${error}`;
+                        errorCount++;
+                    }
+                } catch (error) {
+                    progressItem.className = 'progress-item error';
+                    progressItem.textContent = `✗ Error converting ${file.name}: ${error.message}`;
+                    errorCount++;
+                }
+            }
+
+            loading.style.display = 'none';
+            message.className = 'message ' + (errorCount === 0 ? 'success' : 'error');
+            message.textContent = `Conversion complete: ${successCount} successful, ${errorCount} failed`;
+            message.style.display = 'block';
         });
     </script>
 </body>
