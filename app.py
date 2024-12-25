@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_file
+from flask import Flask, request, render_template, jsonify, send_file
 import os
 from werkzeug.utils import secure_filename
 from converter import convert_to_svg
@@ -7,70 +7,75 @@ import shutil
 
 app = Flask(__name__)
 
-# Configure upload settings
-UPLOAD_FOLDER = 'uploads'
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
-
+# Configure upload folder
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
 @app.route('/')
 def index():
     return render_template('index.html')
 
-@app.route('/convert', methods=['POST'])
-def convert():
-    if 'file' not in request.files:
-        return 'No file uploaded', 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        return 'No file selected', 400
-    
-    if not allowed_file(file.filename):
-        return 'Invalid file type. Please upload a PNG or JPG image.', 400
-
-    temp_input = None
-    temp_output = None
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    temp_dir = None
     try:
-        # Create temporary directory
-        temp_dir = tempfile.mkdtemp()
-        
-        # Save input file
-        input_path = os.path.join(temp_dir, secure_filename(file.filename))
-        file.save(input_path)
-        
-        # Create output path
-        output_path = os.path.join(temp_dir, 'output.svg')
-        
-        # Convert the image
-        convert_to_svg(input_path, output_path)
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'No file provided'})
 
-        # Read the SVG file
-        with open(output_path, 'rb') as f:
-            svg_content = f.read()
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'success': False, 'error': 'No file selected'})
 
-        return svg_content, 200, {
-            'Content-Type': 'image/svg+xml',
-            'Content-Disposition': f'attachment; filename={os.path.splitext(file.filename)[0]}.svg'
-        }
+        if file:
+            # Create a temporary directory for processing
+            temp_dir = tempfile.mkdtemp()
+            
+            # Secure the filename
+            filename = secure_filename(file.filename)
+            
+            # Save input file to temporary directory
+            input_path = os.path.join(temp_dir, filename)
+            file.save(input_path)
+            
+            # Generate output path
+            output_filename = os.path.splitext(filename)[0] + '.svg'
+            output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
+            
+            # Convert the file
+            convert_to_svg(input_path, output_path)
+            
+            # Return success response with file info
+            return jsonify({
+                'success': True,
+                'output_filename': output_filename,
+                'output_path': f'/download/{output_filename}'
+            })
 
     except Exception as e:
-        return str(e), 500
-        
+        return jsonify({'success': False, 'error': str(e)})
+    
     finally:
-        # Clean up temporary directory and all its contents
-        try:
-            if temp_dir and os.path.exists(temp_dir):
+        # Clean up temporary directory
+        if temp_dir and os.path.exists(temp_dir):
+            try:
                 shutil.rmtree(temp_dir)
-        except Exception:
-            pass
+            except Exception as e:
+                print(f"Error cleaning up temporary directory: {str(e)}")
+
+@app.route('/download/<filename>')
+def download_file(filename):
+    try:
+        return send_file(
+            os.path.join(app.config['UPLOAD_FOLDER'], filename),
+            as_attachment=True,
+            download_name=filename
+        )
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True)
